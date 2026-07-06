@@ -111,48 +111,83 @@ def render_trace(agent_traces: list[dict]) -> None:
 # ----------------------------------------------------------------------
 
 def page_submit() -> None:
+    """The Submit Claim page.
+
+    Architecture:
+    - Sample loader at the top (dropdown + button grid fallback)
+    - Form for claim details (always shown, pre-filled when sample is loaded)
+    - Documents section (auto-derived from sample or empty defaults)
+    - Submit button runs the orchestrator
+    """
+    import traceback
+    import logging
+    logger = logging.getLogger("streamlit.page_submit")
+
+    try:
+        _page_submit_impl()
+    except Exception as e:
+        # Show the error to the user so we can see what's going wrong
+        st.error(f"❌ Page error: {type(e).__name__}: {e}")
+        with st.expander("🔍 Full traceback", expanded=True):
+            st.code(traceback.format_exc())
+        # Log to file too
+        with open("/tmp/page_submit_error.log", "w") as f:
+            f.write(f"Error: {e}\n\n{traceback.format_exc()}\n\nSession state: {dict(st.session_state)}\n")
+        logger.exception("page_submit failed")
+
+
+def _page_submit_impl() -> None:
     st.title("📋 Submit a Claim")
-    st.markdown("Submit a new health insurance claim for processing. _v2.1 — with sample loader fix_")
+    st.markdown("Submit a new health insurance claim for processing. _v2.2 — robust error handling_")
 
     # ---- Sample loader ----
     st.markdown("### 🎯 Quick Start: Load a Sample Claim")
     samples_dir = ROOT / "samples"
     sample_files = sorted(samples_dir.glob("tc*.json")) if samples_dir.exists() else []
 
-    # Build a simple map of stem -> sample data (cached to avoid re-reading)
-    if "_samples_cache" not in st.session_state:
-        cache = {}
-        for p in sample_files:
-            try:
-                cache[p.stem] = json.loads(p.read_text())
-            except Exception:
-                pass
-        st.session_state["_samples_cache"] = cache
-    samples_cache = st.session_state["_samples_cache"]
+    if not sample_files:
+        st.warning("No samples found in `samples/` directory. Fill in the form manually below.")
+        active_sample = {}
+    else:
+        # Build a simple map of stem -> sample data
+        if "_samples_cache" not in st.session_state:
+            cache = {}
+            for p in sample_files:
+                try:
+                    cache[p.stem] = json.loads(p.read_text())
+                except Exception as ex:
+                    st.warning(f"Could not load {p.name}: {ex}")
+            st.session_state["_samples_cache"] = cache
+        samples_cache = st.session_state["_samples_cache"]
 
-    if samples_cache:
         st.markdown("**Option 1:** Pick from dropdown")
-        # Show a selectbox with sample names
         sample_names = ["— Select a sample —"] + list(samples_cache.keys())
+        # Find current index from session state
+        active = st.session_state.get("_active_stem")
+        if active and active in samples_cache:
+            current_idx = sample_names.index(active)
+        else:
+            current_idx = 0
         selected_stem = st.selectbox(
             "Choose a test case",
             options=sample_names,
-            index=0,
-            key="_sample_dropdown_v2",
+            index=current_idx,
+            key="_sample_dropdown_v3",
             label_visibility="collapsed",
         )
-
-        # Track what user picked (use a separate key to avoid re-load loops)
+        # Sync the dropdown to the active state
         if selected_stem and not selected_stem.startswith("—"):
             if st.session_state.get("_active_stem") != selected_stem:
                 st.session_state["_active_stem"] = selected_stem
                 st.session_state["_active_sample"] = samples_cache[selected_stem]
+        elif st.session_state.get("_active_stem"):
+            # User chose placeholder but we have a sample loaded — keep it
+            pass
         else:
             st.session_state.pop("_active_stem", None)
             st.session_state.pop("_active_sample", None)
 
         st.markdown("**Option 2:** Click a button")
-        # Fallback button grid — 3 per row
         cols_per_row = 4
         for row_start in range(0, len(sample_files), cols_per_row):
             row_files = sample_files[row_start:row_start + cols_per_row]
@@ -160,45 +195,49 @@ def page_submit() -> None:
             for col, sample_path in zip(cols, row_files):
                 with col:
                     stem = sample_path.stem
-                    if st.button(stem.replace("_", "\n"), key=f"_load_{stem}", use_container_width=True):
+                    # Show short label
+                    short_label = stem.replace("tc", "TC").replace("_", " ")
+                    if st.button(short_label, key=f"_load_{stem}", use_container_width=True):
                         st.session_state["_active_stem"] = stem
                         st.session_state["_active_sample"] = samples_cache.get(stem)
-                        # Also clear any decision from previous run
                         st.session_state.pop("last_decision", None)
                         st.session_state.pop("last_trace", None)
 
         # Show what's loaded
         active_stem = st.session_state.get("_active_stem")
         if active_stem:
-            sample = st.session_state.get("_active_sample", {})
+            sample = st.session_state.get("_active_sample") or {}
             st.success(f"✓ Loaded: **{sample.get('name', active_stem)}** (`{active_stem}`)")
             with st.expander("📄 View sample data", expanded=False):
-                st.json(sample)
-            if st.button("🗑️ Clear loaded sample", key="_clear_v2"):
+                try:
+                    st.json(sample)
+                except Exception:
+                    st.write(sample)  # fallback if json fails
+            if st.button("🗑️ Clear loaded sample", key="_clear_v3"):
                 st.session_state.pop("_active_stem", None)
                 st.session_state.pop("_active_sample", None)
                 st.session_state.pop("last_decision", None)
                 st.session_state.pop("last_trace", None)
-    else:
-        st.warning("No samples found in `samples/` directory")
 
     st.markdown("---")
 
     # ---- Build the form ----
-    active_sample = st.session_state.get("_active_sample", {})
-    default_claim = active_sample.get("claim", {}) if active_sample else {}
-    default_docs = active_sample.get("documents", []) if active_sample else []
+    active_sample = st.session_state.get("_active_sample") or {}
+    if not isinstance(active_sample, dict):
+        active_sample = {}
+    default_claim = active_sample.get("claim", {})
+    default_docs = active_sample.get("documents", [])
 
     st.markdown("### ✏️ Claim Details")
     col1, col2 = st.columns(2)
     with col1:
         member_id = st.text_input(
             "Member ID",
-            value=default_claim.get("member_id", "EMP001"),
+            value=str(default_claim.get("member_id", "EMP001")),
             key="_member_id",
         )
         cat_options = [c.value for c in ClaimCategory]
-        cat_default = default_claim.get("claim_category", "CONSULTATION")
+        cat_default = str(default_claim.get("claim_category", "CONSULTATION"))
         cat_idx = cat_options.index(cat_default) if cat_default in cat_options else 0
         claim_category = st.selectbox(
             "Claim Category",
@@ -206,17 +245,21 @@ def page_submit() -> None:
             index=cat_idx,
             key="_claim_category",
         )
+        try:
+            amount_default = int(default_claim.get("claimed_amount", 1500))
+        except (ValueError, TypeError):
+            amount_default = 1500
         claimed_amount = st.number_input(
             "Claimed Amount (₹)",
             min_value=0,
             max_value=100000,
-            value=int(default_claim.get("claimed_amount", 1500)),
+            value=amount_default,
             step=100,
             key="_claimed_amount",
         )
     with col2:
         try:
-            d_default = date.fromisoformat(default_claim.get("treatment_date", "2024-11-01"))
+            d_default = date.fromisoformat(str(default_claim.get("treatment_date", "2024-11-01")))
         except (ValueError, TypeError):
             d_default = date(2024, 11, 1)
         treatment_date = st.date_input(
@@ -228,23 +271,29 @@ def page_submit() -> None:
         )
         hospital_name = st.text_input(
             "Hospital Name (optional)",
-            value=default_claim.get("hospital_name", "") or "",
+            value=str(default_claim.get("hospital_name", "") or ""),
             key="_hospital_name",
         )
 
     st.markdown("### 📄 Documents")
-    docs_to_show = default_docs if default_docs else [
-        {"file_id": "F001", "file_name": "doc_1.jpg", "actual_type": "PRESCRIPTION", "quality": "GOOD", "content": None},
-        {"file_id": "F002", "file_name": "doc_2.jpg", "actual_type": "HOSPITAL_BILL", "quality": "GOOD", "content": None},
-    ]
+    if not default_docs:
+        default_docs = [
+            {"file_id": "F001", "file_name": "doc_1.jpg", "actual_type": "PRESCRIPTION", "quality": "GOOD", "content": None},
+            {"file_id": "F002", "file_name": "doc_2.jpg", "actual_type": "HOSPITAL_BILL", "quality": "GOOD", "content": None},
+        ]
+        st.info("Using empty document defaults. Load a sample above to see the form pre-filled.")
 
     documents = []
-    for i, dd in enumerate(docs_to_show):
+    type_options = [t.value for t in DocumentType if t.value != "UNKNOWN"]
+    quality_options = [q.value for q in DocumentQuality]
+
+    for i, dd in enumerate(default_docs):
+        if not isinstance(dd, dict):
+            continue
         with st.expander(f"Doc #{i+1} — {dd.get('file_id', f'F{i+1:03d}')}", expanded=(i < 2)):
             col_d1, col_d2 = st.columns(2)
             with col_d1:
-                type_options = [t.value for t in DocumentType if t.value != "UNKNOWN"]
-                dt = dd.get("actual_type", "PRESCRIPTION")
+                dt = str(dd.get("actual_type", "PRESCRIPTION"))
                 tidx = type_options.index(dt) if dt in type_options else 0
                 doc_type = st.selectbox(
                     "Type",
@@ -254,12 +303,11 @@ def page_submit() -> None:
                 )
                 file_name = st.text_input(
                     "File name",
-                    value=dd.get("file_name", f"doc_{i+1}.jpg"),
+                    value=str(dd.get("file_name", f"doc_{i+1}.jpg")),
                     key=f"_doc_filename_{i}",
                 )
             with col_d2:
-                quality_options = [q.value for q in DocumentQuality]
-                ql = dd.get("quality", "GOOD")
+                ql = str(dd.get("quality", "GOOD"))
                 qidx = quality_options.index(ql) if ql in quality_options else 0
                 quality = st.selectbox(
                     "Quality",
@@ -276,7 +324,10 @@ def page_submit() -> None:
             )
             content = None
             if include_content and dd.get("content"):
-                st.json(dd["content"])
+                try:
+                    st.json(dd["content"])
+                except Exception:
+                    st.write(dd["content"])
                 content = dd["content"]
             elif include_content:
                 if doc_type == "PRESCRIPTION":
@@ -313,22 +364,26 @@ def page_submit() -> None:
     if submitted:
         with st.spinner("Running claim through 6-agent pipeline..."):
             try:
-                doc_inputs = [
-                    DocumentInput(
-                        file_id=d["file_id"],
-                        file_name=d["file_name"],
-                        actual_type=DocumentType(d["actual_type"]) if d["actual_type"] else None,
-                        quality=DocumentQuality(d["quality"]),
-                        content=d["content"],
-                    )
-                    for d in documents
-                ]
+                doc_inputs = []
+                for d in documents:
+                    try:
+                        doc_inputs.append(
+                            DocumentInput(
+                                file_id=str(d.get("file_id", "F001")),
+                                file_name=str(d.get("file_name", "")),
+                                actual_type=DocumentType(d["actual_type"]) if d.get("actual_type") else None,
+                                quality=DocumentQuality(d["quality"]),
+                                content=d.get("content"),
+                            )
+                        )
+                    except Exception as ex:
+                        st.warning(f"Skipping bad doc: {ex}")
+
                 # Build claims history
-                from agents.core.domain import ClaimHistoryItem
-                from agents.core.enums import ComponentFailure
                 history = []
                 for h in default_claim.get("claims_history", []):
                     try:
+                        from agents.core.domain import ClaimHistoryItem
                         history.append(ClaimHistoryItem(
                             claim_id=h.get("claim_id", "?"),
                             date=date.fromisoformat(h["date"]),
@@ -337,22 +392,24 @@ def page_submit() -> None:
                         ))
                     except Exception:
                         pass
+
                 # Build sim failure
                 sim_failure = None
                 sim_str = active_sample.get("simulate_component_failure")
                 if sim_str:
                     try:
+                        from agents.core.enums import ComponentFailure
                         sim_failure = ComponentFailure(sim_str)
                     except (ValueError, KeyError):
                         sim_failure = None
 
                 claim = ClaimInput(
-                    member_id=member_id,
+                    member_id=str(member_id),
                     policy_id="PLUM_GHI_2024",
                     claim_category=ClaimCategory(claim_category),
                     treatment_date=treatment_date,
-                    claimed_amount=claimed_amount,
-                    hospital_name=hospital_name or None,
+                    claimed_amount=float(claimed_amount),
+                    hospital_name=str(hospital_name) if hospital_name else None,
                     documents=doc_inputs,
                     claims_history=history,
                     simulate_component_failure=sim_failure,
@@ -367,29 +424,34 @@ def page_submit() -> None:
                 st.session_state["last_decision"] = decision
                 st.session_state["last_trace"] = trace
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Error processing claim: {type(e).__name__}: {e}")
                 import traceback
-                st.code(traceback.format_exc())
+                with st.expander("🔍 Full traceback", expanded=True):
+                    st.code(traceback.format_exc())
 
     # Show result
     if st.session_state.get("last_decision"):
         st.markdown("---")
         st.markdown("## 📊 Decision")
-        render_decision_card(st.session_state["last_decision"])
+        try:
+            render_decision_card(st.session_state["last_decision"])
+        except Exception as e:
+            st.error(f"Error rendering decision: {e}")
         if st.session_state.get("last_trace"):
-            render_trace([
-                {
-                    "agent": t.agent_name.value,
-                    "status": t.status.value,
-                    "duration_ms": t.duration_ms,
-                    "confidence": t.confidence_contribution,
-                    "notes": t.notes,
-                    "error": t.error,
-                }
-                for t in st.session_state["last_trace"].agent_traces
-            ])
-
-
+            try:
+                render_trace([
+                    {
+                        "agent": t.agent_name.value,
+                        "status": t.status.value,
+                        "duration_ms": t.duration_ms,
+                        "confidence": t.confidence_contribution,
+                        "notes": t.notes,
+                        "error": t.error,
+                    }
+                    for t in st.session_state["last_trace"].agent_traces
+                ])
+            except Exception as e:
+                st.error(f"Error rendering trace: {e}")
 # ----------------------------------------------------------------------
 # Page 2: Test Cases
 # ----------------------------------------------------------------------
