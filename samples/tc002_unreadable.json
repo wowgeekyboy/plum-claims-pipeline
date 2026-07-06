@@ -1,0 +1,34 @@
+{
+  "name": "TC002 - Unreadable Document",
+  "description": "Pharmacy bill is blurry. Should be REJECTED with re-upload message.",
+  "expected_decision": "REJECTED",
+  "claim": {
+    "member_id": "EMP004",
+    "policy_id": "PLUM_GHI_2024",
+    "claim_category": "PHARMACY",
+    "treatment_date": "2024-10-25",
+    "claimed_amount": 800.0,
+    "hospital_name": "Health First Pharmacy"
+  },
+  "documents": [
+    {
+      "file_id": "F003",
+      "file_name": "prescription.jpg",
+      "actual_type": "PRESCRIPTION",
+      "quality": "GOOD",
+      "content": {
+        "doctor_name": "Dr. Meena Iyer",
+        "patient_name": "Sneha Reddy",
+        "diagnosis": "Seasonal allergies",
+        "medicines": ["Cetirizine 10mg", "Montelukast 10mg"]
+      }
+    },
+    {
+      "file_id": "F004",
+      "file_name": "blurry_bill.jpg",
+      "actual_type": "PHARMACY_BILL",
+      "quality": "UNREADABLE",
+      "content": null
+    }
+  ]
+}

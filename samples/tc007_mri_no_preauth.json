@@ -1,0 +1,44 @@
+{
+  "name": "TC007 - MRI Without Pre-Auth",
+  "description": "MRI ₹15,000 without pre-authorization. Should be REJECTED with re-submit instructions.",
+  "expected_decision": "REJECTED",
+  "claim": {
+    "member_id": "EMP007",
+    "policy_id": "PLUM_GHI_2024",
+    "claim_category": "DIAGNOSTIC",
+    "treatment_date": "2024-11-02",
+    "claimed_amount": 15000.0,
+    "hospital_name": "Medanta"
+  },
+  "documents": [
+    {
+      "file_id": "F012",
+      "file_name": "prescription.jpg",
+      "actual_type": "PRESCRIPTION",
+      "quality": "GOOD",
+      "content": {
+        "doctor_name": "Dr. Venkat Rao",
+        "doctor_registration": "AP/67890/2017",
+        "diagnosis": "Suspected Lumbar Disc Herniation",
+        "tests_ordered": ["MRI Lumbar Spine"]
+      }
+    },
+    {
+      "file_id": "F013",
+      "file_name": "lab_report.jpg",
+      "actual_type": "LAB_REPORT",
+      "quality": "GOOD",
+      "content": {"test_name": "MRI Lumbar Spine"}
+    },
+    {
+      "file_id": "F014",
+      "file_name": "bill.jpg",
+      "actual_type": "HOSPITAL_BILL",
+      "quality": "GOOD",
+      "content": {
+        "line_items": [{"description": "MRI Lumbar Spine", "amount": 15000}],
+        "total": 15000
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "name": "TC009 - Fraud Signal (Same-Day Claims)",
+  "description": "Member has 4 claims on the same day. Should be MANUAL_REVIEW.",
+  "expected_decision": "MANUAL_REVIEW",
+  "claim": {
+    "member_id": "EMP008",
+    "policy_id": "PLUM_GHI_2024",
+    "claim_category": "CONSULTATION",
+    "treatment_date": "2024-10-30",
+    "claimed_amount": 4800.0,
+    "hospital_name": "City Clinic",
+    "claims_history": [
+      {"claim_id": "CLM_0081", "date": "2024-10-30", "amount": 1200, "provider": "City Clinic A"},
+      {"claim_id": "CLM_0082", "date": "2024-10-30", "amount": 1800, "provider": "City Clinic B"},
+      {"claim_id": "CLM_0083", "date": "2024-10-30", "amount": 2100, "provider": "Wellness Center"}
+    ]
+  },
+  "documents": [
+    {
+      "file_id": "F017",
+      "file_name": "prescription.jpg",
+      "actual_type": "PRESCRIPTION",
+      "quality": "GOOD",
+      "content": {
+        "doctor_name": "Dr. S. Khan",
+        "diagnosis": "Migraine"
+      }
+    },
+    {
+      "file_id": "F018",
+      "file_name": "bill.jpg",
+      "actual_type": "HOSPITAL_BILL",
+      "quality": "GOOD",
+      "content": {"total": 4800}
+    }
+  ]
+}

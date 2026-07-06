@@ -1,0 +1,43 @@
+{
+  "name": "TC001 - Wrong Documents (2 prescriptions)",
+  "description": "Two prescriptions for a consultation claim. Should be REJECTED with specific message about needing hospital bill.",
+  "expected_decision": "REJECTED",
+  "claim": {
+    "member_id": "EMP001",
+    "policy_id": "PLUM_GHI_2024",
+    "claim_category": "CONSULTATION",
+    "treatment_date": "2024-11-01",
+    "claimed_amount": 1500.0,
+    "hospital_name": "City Clinic, Bengaluru"
+  },
+  "documents": [
+    {
+      "file_id": "F001",
+      "file_name": "dr_sharma_prescription.jpg",
+      "actual_type": "PRESCRIPTION",
+      "quality": "GOOD",
+      "content": {
+        "doctor_name": "Dr. Arun Sharma",
+        "doctor_registration": "KA/45678/2015",
+        "patient_name": "Rajesh Kumar",
+        "date": "2024-11-01",
+        "diagnosis": "Viral Fever",
+        "medicines": ["Paracetamol 650mg", "Vitamin C 500mg"]
+      }
+    },
+    {
+      "file_id": "F002",
+      "file_name": "another_prescription.jpg",
+      "actual_type": "PRESCRIPTION",
+      "quality": "GOOD",
+      "content": {
+        "doctor_name": "Dr. Arun Sharma",
+        "doctor_registration": "KA/45678/2015",
+        "patient_name": "Rajesh Kumar",
+        "date": "2024-11-01",
+        "diagnosis": "Follow-up consultation",
+        "medicines": ["Paracetamol 650mg"]
+      }
+    }
+  ]
+}

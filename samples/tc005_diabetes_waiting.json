@@ -1,0 +1,43 @@
+{
+  "name": "TC005 - Diabetes Waiting Period",
+  "description": "Vikram Joshi claimed diabetes within 90-day waiting period. Should be REJECTED.",
+  "expected_decision": "REJECTED",
+  "claim": {
+    "member_id": "EMP005",
+    "policy_id": "PLUM_GHI_2024",
+    "claim_category": "CONSULTATION",
+    "treatment_date": "2024-10-15",
+    "claimed_amount": 3000.0,
+    "hospital_name": "Apollo Hospitals"
+  },
+  "documents": [
+    {
+      "file_id": "F009",
+      "file_name": "prescription.jpg",
+      "actual_type": "PRESCRIPTION",
+      "quality": "GOOD",
+      "content": {
+        "doctor_name": "Dr. Sunil Mehta",
+        "doctor_registration": "GJ/56789/2014",
+        "patient_name": "Vikram Joshi",
+        "diagnosis": "Type 2 Diabetes Mellitus",
+        "medicines": ["Metformin 500mg", "Glimepiride 1mg"]
+      }
+    },
+    {
+      "file_id": "F010",
+      "file_name": "bill.jpg",
+      "actual_type": "HOSPITAL_BILL",
+      "quality": "GOOD",
+      "content": {
+        "patient_name": "Vikram Joshi",
+        "date": "2024-10-15",
+        "line_items": [
+          {"description": "Consultation", "amount": 2000},
+          {"description": "Lab tests", "amount": 1000}
+        ],
+        "total": 3000
+      }
+    }
+  ]
+}

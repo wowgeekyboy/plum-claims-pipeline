@@ -1,0 +1,39 @@
+{
+  "name": "TC003 - Patient Mismatch",
+  "description": "Prescription for Rajesh Kumar, bill for Arjun Mehta. Should be REJECTED with names surfaced.",
+  "expected_decision": "REJECTED",
+  "claim": {
+    "member_id": "EMP001",
+    "policy_id": "PLUM_GHI_2024",
+    "claim_category": "CONSULTATION",
+    "treatment_date": "2024-11-01",
+    "claimed_amount": 1500.0,
+    "hospital_name": "City Clinic, Bengaluru"
+  },
+  "documents": [
+    {
+      "file_id": "F005",
+      "file_name": "prescription_rajesh.jpg",
+      "actual_type": "PRESCRIPTION",
+      "quality": "GOOD",
+      "patient_name_on_doc": "Rajesh Kumar",
+      "content": {
+        "doctor_name": "Dr. Arun Sharma",
+        "patient_name": "Rajesh Kumar",
+        "diagnosis": "Viral Fever"
+      }
+    },
+    {
+      "file_id": "F006",
+      "file_name": "bill_arjun.jpg",
+      "actual_type": "HOSPITAL_BILL",
+      "quality": "GOOD",
+      "patient_name_on_doc": "Arjun Mehta",
+      "content": {
+        "hospital_name": "City Clinic, Bengaluru",
+        "patient_name": "Arjun Mehta",
+        "total": 1500
+      }
+    }
+  ]
+}

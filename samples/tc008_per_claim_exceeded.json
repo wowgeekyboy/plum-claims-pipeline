@@ -1,0 +1,40 @@
+{
+  "name": "TC008 - Per-Claim Limit Exceeded",
+  "description": "Claimed ₹7,500 exceeds per-claim limit of ₹5,000. Should be REJECTED.",
+  "expected_decision": "REJECTED",
+  "claim": {
+    "member_id": "EMP003",
+    "policy_id": "PLUM_GHI_2024",
+    "claim_category": "CONSULTATION",
+    "treatment_date": "2024-10-20",
+    "claimed_amount": 7500.0,
+    "hospital_name": "Max Healthcare"
+  },
+  "documents": [
+    {
+      "file_id": "F015",
+      "file_name": "prescription.jpg",
+      "actual_type": "PRESCRIPTION",
+      "quality": "GOOD",
+      "content": {
+        "doctor_name": "Dr. R. Gupta",
+        "doctor_registration": "DL/34567/2016",
+        "diagnosis": "Gastroenteritis",
+        "medicines": ["Antibiotics", "Probiotics", "ORS"]
+      }
+    },
+    {
+      "file_id": "F016",
+      "file_name": "bill.jpg",
+      "actual_type": "HOSPITAL_BILL",
+      "quality": "GOOD",
+      "content": {
+        "line_items": [
+          {"description": "Consultation Fee", "amount": 2000},
+          {"description": "Medicines", "amount": 5500}
+        ],
+        "total": 7500
+      }
+    }
+  ]
+}

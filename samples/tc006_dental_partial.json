@@ -1,0 +1,31 @@
+{
+  "name": "TC006 - Dental Partial (Cosmetic Exclusion)",
+  "description": "Root canal covered, teeth whitening excluded. Should be PARTIAL ₹8,000.",
+  "expected_decision": "PARTIAL",
+  "expected_amount": 8000,
+  "claim": {
+    "member_id": "EMP002",
+    "policy_id": "PLUM_GHI_2024",
+    "claim_category": "DENTAL",
+    "treatment_date": "2024-10-15",
+    "claimed_amount": 12000.0,
+    "hospital_name": "Smile Dental Clinic"
+  },
+  "documents": [
+    {
+      "file_id": "F011",
+      "file_name": "dental_bill.jpg",
+      "actual_type": "HOSPITAL_BILL",
+      "quality": "GOOD",
+      "content": {
+        "hospital_name": "Smile Dental Clinic",
+        "patient_name": "Priya Singh",
+        "line_items": [
+          {"description": "Root Canal Treatment", "amount": 8000},
+          {"description": "Teeth Whitening", "amount": 4000}
+        ],
+        "total": 12000
+      }
+    }
+  ]
+}

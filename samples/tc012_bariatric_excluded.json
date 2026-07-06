@@ -1,0 +1,40 @@
+{
+  "name": "TC012 - Excluded Treatment (Bariatric)",
+  "description": "Bariatric consultation is excluded. Should be REJECTED.",
+  "expected_decision": "REJECTED",
+  "claim": {
+    "member_id": "EMP009",
+    "policy_id": "PLUM_GHI_2024",
+    "claim_category": "CONSULTATION",
+    "treatment_date": "2024-10-18",
+    "claimed_amount": 8000.0,
+    "hospital_name": "Manipal Hospitals"
+  },
+  "documents": [
+    {
+      "file_id": "F023",
+      "file_name": "prescription.jpg",
+      "actual_type": "PRESCRIPTION",
+      "quality": "GOOD",
+      "content": {
+        "doctor_name": "Dr. P. Banerjee",
+        "doctor_registration": "WB/34567/2015",
+        "diagnosis": "Morbid Obesity — BMI 37",
+        "treatment": "Bariatric Consultation and Customised Diet Plan"
+      }
+    },
+    {
+      "file_id": "F024",
+      "file_name": "bill.jpg",
+      "actual_type": "HOSPITAL_BILL",
+      "quality": "GOOD",
+      "content": {
+        "line_items": [
+          {"description": "Bariatric Consultation", "amount": 3000},
+          {"description": "Personalised Diet and Nutrition Program", "amount": 5000}
+        ],
+        "total": 8000
+      }
+    }
+  ]
+}

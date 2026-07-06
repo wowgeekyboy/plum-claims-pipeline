@@ -1,0 +1,42 @@
+{
+  "name": "TC011 - Graceful Component Failure",
+  "description": "Simulates a component failure. Pipeline continues with reduced confidence.",
+  "expected_decision": "APPROVED",
+  "simulate_component_failure": "DOCUMENT_EXTRACTION",
+  "claim": {
+    "member_id": "EMP006",
+    "policy_id": "PLUM_GHI_2024",
+    "claim_category": "ALTERNATIVE_MEDICINE",
+    "treatment_date": "2024-10-28",
+    "claimed_amount": 4000.0,
+    "hospital_name": "Ayur Wellness Centre"
+  },
+  "documents": [
+    {
+      "file_id": "F021",
+      "file_name": "ayurvedic_prescription.jpg",
+      "actual_type": "PRESCRIPTION",
+      "quality": "GOOD",
+      "content": {
+        "doctor_name": "Vaidya T. Krishnan",
+        "doctor_registration": "AYUR/KL/2345/2019",
+        "diagnosis": "Chronic Joint Pain",
+        "treatment": "Panchakarma Therapy"
+      }
+    },
+    {
+      "file_id": "F022",
+      "file_name": "bill.jpg",
+      "actual_type": "HOSPITAL_BILL",
+      "quality": "GOOD",
+      "content": {
+        "hospital_name": "Ayur Wellness Centre",
+        "line_items": [
+          {"description": "Panchakarma Therapy (5 sessions)", "amount": 3000},
+          {"description": "Consultation", "amount": 1000}
+        ],
+        "total": 4000
+      }
+    }
+  ]
+}

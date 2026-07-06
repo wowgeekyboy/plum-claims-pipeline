@@ -115,56 +115,137 @@ def page_submit() -> None:
     st.title("📋 Submit a Claim")
     st.markdown("Submit a new health insurance claim for processing.")
 
+    # Sample loader (outside the form so we can populate the form)
+    st.markdown("### 🎯 Quick Start: Load a Sample Claim")
+    samples_dir = ROOT / "samples"
+    sample_files = sorted(samples_dir.glob("tc*.json")) if samples_dir.exists() else []
+    if sample_files:
+        sample_labels = ["— Select a sample —"] + [
+            f"{p.stem}: {json.loads(p.read_text()).get('name', p.stem)}"
+            for p in sample_files
+        ]
+        selected = st.selectbox(
+            "Choose a sample (loads all fields automatically)",
+            options=sample_labels,
+            key="sample_selector",
+        )
+        if selected != "— Select a sample —":
+            # Find the matching file
+            stem = selected.split(":")[0]
+            sample_path = samples_dir / f"{stem}.json"
+            if sample_path.exists():
+                sample_data = json.loads(sample_path.read_text())
+                st.session_state["loaded_sample"] = sample_data
+                st.success(f"Loaded: {sample_data.get('name', stem)}")
+                with st.expander("📄 Sample details", expanded=False):
+                    st.json(sample_data)
+                st.markdown("---")
+
+    # Determine initial values from loaded sample
+    loaded = st.session_state.get("loaded_sample", {})
+    default_claim = loaded.get("claim", {})
+    default_docs = loaded.get("documents", [])
+
     with st.form("claim_form"):
         col1, col2 = st.columns(2)
         with col1:
-            member_id = st.text_input("Member ID", value="EMP001", help="e.g. EMP001, EMP005")
+            member_id = st.text_input(
+                "Member ID",
+                value=default_claim.get("member_id", "EMP001"),
+                help="e.g. EMP001, EMP005",
+            )
+            # Set default category from sample
+            cat_options = [c.value for c in ClaimCategory]
+            default_cat = default_claim.get("claim_category", "CONSULTATION")
+            cat_idx = cat_options.index(default_cat) if default_cat in cat_options else 0
             claim_category = st.selectbox(
                 "Claim Category",
-                options=[c.value for c in ClaimCategory],
-                index=0,
+                options=cat_options,
+                index=cat_idx,
             )
             claimed_amount = st.number_input(
                 "Claimed Amount (₹)",
                 min_value=0,
                 max_value=100000,
-                value=1500,
+                value=int(default_claim.get("claimed_amount", 1500)),
                 step=100,
             )
         with col2:
+            # Parse treatment date
+            try:
+                default_date = date.fromisoformat(default_claim.get("treatment_date", "2024-11-01"))
+            except (ValueError, TypeError):
+                default_date = date(2024, 11, 1)
             treatment_date = st.date_input(
                 "Treatment Date",
-                value=date(2024, 11, 1),
+                value=default_date,
                 min_value=date(2020, 1, 1),
                 max_value=date(2030, 12, 31),
             )
-            hospital_name = st.text_input("Hospital Name (optional)", value="")
+            hospital_name = st.text_input(
+                "Hospital Name (optional)",
+                value=default_claim.get("hospital_name", ""),
+            )
 
         st.markdown("### Documents")
         st.markdown("Add the documents uploaded for this claim.")
 
-        num_docs = st.number_input("Number of documents", min_value=1, max_value=5, value=2)
+        # If a sample is loaded, use its documents; otherwise default to 2 empty
+        if default_docs:
+            num_docs = len(default_docs)
+            st.info(f"Sample loaded — {num_docs} document(s) pre-filled below")
+        else:
+            num_docs = st.number_input("Number of documents", min_value=1, max_value=5, value=2)
 
         documents = []
         for i in range(num_docs):
-            with st.expander(f"Document #{i+1}", expanded=(i < 2)):
+            # Get defaults from sample if available
+            default_doc = default_docs[i] if i < len(default_docs) else {}
+            default_type = default_doc.get("actual_type", "PRESCRIPTION")
+            default_quality = default_doc.get("quality", "GOOD")
+            default_filename = default_doc.get("file_name", f"doc_{i+1}.jpg")
+            default_content = default_doc.get("content")
+
+            with st.expander(f"Document #{i+1}: {default_doc.get('file_id', f'F{i+1:03d}')}", expanded=(i < 2)):
                 col_d1, col_d2 = st.columns(2)
                 with col_d1:
+                    type_options = [t.value for t in DocumentType if t.value != "UNKNOWN"]
+                    type_idx = type_options.index(default_type) if default_type in type_options else 0
                     doc_type = st.selectbox(
                         "Type",
-                        options=[t.value for t in DocumentType if t.value != "UNKNOWN"],
+                        options=type_options,
+                        index=type_idx,
                         key=f"doctype_{i}",
                     )
-                    file_name = st.text_input("File name", value=f"doc_{i+1}.jpg", key=f"filename_{i}")
+                    file_name = st.text_input("File name", value=default_filename, key=f"filename_{i}")
                 with col_d2:
+                    quality_options = [q.value for q in DocumentQuality]
+                    qual_idx = quality_options.index(default_quality) if default_quality in quality_options else 0
                     quality = st.selectbox(
                         "Quality",
-                        options=[q.value for q in DocumentQuality],
+                        options=quality_options,
+                        index=qual_idx,
                         key=f"quality_{i}",
                     )
-                include_content = st.checkbox("Include pre-extracted content (test mode)", key=f"content_{i}")
-                content = None
-                if include_content:
+                # If sample has content, show it
+                if default_content is not None:
+                    include_content = st.checkbox(
+                        "Include pre-extracted content (test mode)",
+                        value=True,
+                        key=f"content_{i}",
+                    )
+                    if include_content:
+                        st.json(default_content)
+                else:
+                    include_content = st.checkbox(
+                        "Include pre-extracted content (test mode)",
+                        value=False,
+                        key=f"content_{i}",
+                    )
+
+                content = default_content if include_content and default_content else None
+                if include_content and not default_content:
+                    # Build a basic content based on type
                     if doc_type == "PRESCRIPTION":
                         content = {
                             "patient_name": st.text_input("Patient name", value="Rajesh Kumar", key=f"patient_{i}"),
@@ -184,7 +265,7 @@ def page_submit() -> None:
                             ],
                         }
                 documents.append({
-                    "file_id": f"F{i+1:03d}",
+                    "file_id": default_doc.get("file_id", f"F{i+1:03d}"),
                     "file_name": file_name,
                     "actual_type": doc_type,
                     "quality": quality,
@@ -364,6 +445,49 @@ def page_test_cases() -> None:
 # Page 3: About
 # ----------------------------------------------------------------------
 
+def page_mock_documents() -> None:
+    st.title("🖼️ Mock Documents")
+    st.markdown("""
+    Visual mock medical documents generated for demo purposes.
+    These are JPG files that look like real Indian medical documents —
+    prescriptions, hospital bills, lab reports.
+
+    Use these to:
+    - Demonstrate the system with realistic-looking inputs
+    - Show the demo video
+    - Understand what the LLM (Gemini) would see in production
+    """)
+
+    mock_dir = ROOT / "mock_docs"
+    if not mock_dir.exists():
+        st.error("Mock documents not found. Run `python scripts/generate_mock_documents.py` first.")
+        return
+
+    # Categorize documents
+    categories = {
+        "Prescriptions": [f for f in mock_dir.glob("*prescription*.jpg")],
+        "Hospital & Pharmacy Bills": [f for f in mock_dir.glob("*bill*.jpg") if "blurry" not in f.name],
+        "Lab Reports": [f for f in mock_dir.glob("*report*.jpg")],
+    }
+
+    for category, files in categories.items():
+        if not files:
+            continue
+        st.markdown(f"### {category}")
+        cols = st.columns(min(len(files), 3))
+        for i, f in enumerate(sorted(files)):
+            with cols[i % 3]:
+                st.image(str(f), caption=f.name, use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("""
+    ### How to regenerate
+    Run: `python scripts/generate_mock_documents.py`
+
+    The documents are deterministic — same input → same output.
+    """)
+
+
 def page_about() -> None:
     st.title("ℹ️ About")
     st.markdown("""
@@ -407,6 +531,7 @@ def page_about() -> None:
 PAGES = {
     "📋 Submit Claim": page_submit,
     "🧪 Test Cases": page_test_cases,
+    "🖼️ Mock Documents": page_mock_documents,
     "ℹ️ About": page_about,
 }
 

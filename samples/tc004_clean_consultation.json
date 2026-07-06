@@ -1,0 +1,47 @@
+{
+  "name": "TC004 - Clean Consultation (Happy Path)",
+  "description": "Valid consultation claim. Should be APPROVED ₹1,350 (10% co-pay applied).",
+  "expected_decision": "APPROVED",
+  "expected_amount": 1350,
+  "claim": {
+    "member_id": "EMP001",
+    "policy_id": "PLUM_GHI_2024",
+    "claim_category": "CONSULTATION",
+    "treatment_date": "2024-11-01",
+    "claimed_amount": 1500.0,
+    "hospital_name": "City Clinic, Bengaluru"
+  },
+  "documents": [
+    {
+      "file_id": "F007",
+      "file_name": "prescription.jpg",
+      "actual_type": "PRESCRIPTION",
+      "quality": "GOOD",
+      "content": {
+        "doctor_name": "Dr. Arun Sharma",
+        "doctor_registration": "KA/45678/2015",
+        "patient_name": "Rajesh Kumar",
+        "date": "2024-11-01",
+        "diagnosis": "Viral Fever",
+        "medicines": ["Paracetamol 650mg", "Vitamin C 500mg"]
+      }
+    },
+    {
+      "file_id": "F008",
+      "file_name": "hospital_bill.jpg",
+      "actual_type": "HOSPITAL_BILL",
+      "quality": "GOOD",
+      "content": {
+        "hospital_name": "City Clinic, Bengaluru",
+        "patient_name": "Rajesh Kumar",
+        "date": "2024-11-01",
+        "line_items": [
+          {"description": "Consultation Fee", "amount": 1000},
+          {"description": "CBC Test", "amount": 300},
+          {"description": "Dengue NS1 Test", "amount": 200}
+        ],
+        "total": 1500
+      }
+    }
+  ]
+}
