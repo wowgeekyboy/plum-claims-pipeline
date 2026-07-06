@@ -115,7 +115,7 @@ def page_submit() -> None:
     st.title("📋 Submit a Claim")
     st.markdown("Submit a new health insurance claim for processing.")
 
-    # Sample loader (outside the form so we can populate the form)
+    # Sample loader — use a callback to update session state
     st.markdown("### 🎯 Quick Start: Load a Sample Claim")
     samples_dir = ROOT / "samples"
     sample_files = sorted(samples_dir.glob("tc*.json")) if samples_dir.exists() else []
@@ -124,155 +124,191 @@ def page_submit() -> None:
             f"{p.stem}: {json.loads(p.read_text()).get('name', p.stem)}"
             for p in sample_files
         ]
-        selected = st.selectbox(
+
+        def on_sample_change() -> None:
+            """When a sample is selected, load it into session state and clear stale form values."""
+            sel = st.session_state.get("sample_selector", "— Select a sample —")
+            if sel and sel != "— Select a sample —":
+                stem = sel.split(":")[0]
+                sample_path = samples_dir / f"{stem}.json"
+                if sample_path.exists():
+                    st.session_state["loaded_sample"] = json.loads(sample_path.read_text())
+                    # Bump form version so widgets re-render with new defaults
+                    st.session_state["form_version"] = st.session_state.get("form_version", 0) + 1
+                    # Clear last decision
+                    st.session_state.pop("last_decision", None)
+                    st.session_state.pop("last_trace", None)
+            else:
+                st.session_state.pop("loaded_sample", None)
+
+        st.selectbox(
             "Choose a sample (loads all fields automatically)",
             options=sample_labels,
             key="sample_selector",
+            on_change=on_sample_change,
         )
-        if selected != "— Select a sample —":
-            # Find the matching file
-            stem = selected.split(":")[0]
-            sample_path = samples_dir / f"{stem}.json"
-            if sample_path.exists():
-                sample_data = json.loads(sample_path.read_text())
-                st.session_state["loaded_sample"] = sample_data
-                st.success(f"Loaded: {sample_data.get('name', stem)}")
-                with st.expander("📄 Sample details", expanded=False):
-                    st.json(sample_data)
-                st.markdown("---")
+
+        if st.session_state.get("loaded_sample"):
+            sample = st.session_state["loaded_sample"]
+            st.success(f"✓ Loaded: {sample.get('name', 'sample')}")
+            with st.expander("📄 Sample details", expanded=False):
+                st.json(sample)
+            if st.button("🔄 Clear loaded sample"):
+                st.session_state.pop("loaded_sample", None)
+                st.session_state["form_version"] = st.session_state.get("form_version", 0) + 1
+                st.rerun()
+            st.markdown("---")
 
     # Determine initial values from loaded sample
+    # Use session_state to manage widget values directly (survives reruns)
     loaded = st.session_state.get("loaded_sample", {})
     default_claim = loaded.get("claim", {})
     default_docs = loaded.get("documents", [])
 
-    with st.form("claim_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            member_id = st.text_input(
-                "Member ID",
-                value=default_claim.get("member_id", "EMP001"),
-                help="e.g. EMP001, EMP005",
-            )
-            # Set default category from sample
-            cat_options = [c.value for c in ClaimCategory]
-            default_cat = default_claim.get("claim_category", "CONSULTATION")
-            cat_idx = cat_options.index(default_cat) if default_cat in cat_options else 0
-            claim_category = st.selectbox(
-                "Claim Category",
-                options=cat_options,
-                index=cat_idx,
-            )
-            claimed_amount = st.number_input(
-                "Claimed Amount (₹)",
-                min_value=0,
-                max_value=100000,
-                value=int(default_claim.get("claimed_amount", 1500)),
-                step=100,
-            )
-        with col2:
-            # Parse treatment date
-            try:
-                default_date = date.fromisoformat(default_claim.get("treatment_date", "2024-11-01"))
-            except (ValueError, TypeError):
-                default_date = date(2024, 11, 1)
-            treatment_date = st.date_input(
-                "Treatment Date",
-                value=default_date,
-                min_value=date(2020, 1, 1),
-                max_value=date(2030, 12, 31),
-            )
-            hospital_name = st.text_input(
-                "Hospital Name (optional)",
-                value=default_claim.get("hospital_name", ""),
-            )
+    # Initialize form defaults in session state on first render OR when sample changes
+    form_version = st.session_state.get("form_version", 0)
+    if f"member_id_v{form_version}" not in st.session_state:
+        st.session_state[f"member_id_v{form_version}"] = default_claim.get("member_id", "EMP001")
+        st.session_state[f"claimed_amount_v{form_version}"] = int(default_claim.get("claimed_amount", 1500))
+        st.session_state[f"hospital_name_v{form_version}"] = default_claim.get("hospital_name", "") or ""
+        try:
+            default_date = date.fromisoformat(default_claim.get("treatment_date", "2024-11-01"))
+        except (ValueError, TypeError):
+            default_date = date(2024, 11, 1)
+        st.session_state[f"treatment_date_v{form_version}"] = default_date
+        st.session_state[f"claim_category_v{form_version}"] = default_claim.get("claim_category", "CONSULTATION")
 
-        st.markdown("### Documents")
-        st.markdown("Add the documents uploaded for this claim.")
+    v = form_version  # shorthand
 
-        # If a sample is loaded, use its documents; otherwise default to 2 empty
-        if default_docs:
-            num_docs = len(default_docs)
-            st.info(f"Sample loaded — {num_docs} document(s) pre-filled below")
-        else:
-            num_docs = st.number_input("Number of documents", min_value=1, max_value=5, value=2)
+    col1, col2 = st.columns(2)
+    with col1:
+        member_id = st.text_input(
+            "Member ID",
+            key=f"member_id_v{v}",
+            help="e.g. EMP001, EMP005",
+        )
+        cat_options = [c.value for c in ClaimCategory]
+        claim_category = st.selectbox(
+            "Claim Category",
+            options=cat_options,
+            key=f"claim_category_v{v}",
+        )
+        claimed_amount = st.number_input(
+            "Claimed Amount (₹)",
+            min_value=0,
+            max_value=100000,
+            step=100,
+            key=f"claimed_amount_v{v}",
+        )
+    with col2:
+        treatment_date = st.date_input(
+            "Treatment Date",
+            min_value=date(2020, 1, 1),
+            max_value=date(2030, 12, 31),
+            key=f"treatment_date_v{v}",
+        )
+        hospital_name = st.text_input(
+            "Hospital Name (optional)",
+            key=f"hospital_name_v{v}",
+        )
 
-        documents = []
-        for i in range(num_docs):
-            # Get defaults from sample if available
-            default_doc = default_docs[i] if i < len(default_docs) else {}
-            default_type = default_doc.get("actual_type", "PRESCRIPTION")
-            default_quality = default_doc.get("quality", "GOOD")
-            default_filename = default_doc.get("file_name", f"doc_{i+1}.jpg")
-            default_content = default_doc.get("content")
+    st.markdown("### Documents")
+    st.markdown("Add the documents uploaded for this claim.")
 
-            with st.expander(f"Document #{i+1}: {default_doc.get('file_id', f'F{i+1:03d}')}", expanded=(i < 2)):
-                col_d1, col_d2 = st.columns(2)
-                with col_d1:
-                    type_options = [t.value for t in DocumentType if t.value != "UNKNOWN"]
-                    type_idx = type_options.index(default_type) if default_type in type_options else 0
-                    doc_type = st.selectbox(
-                        "Type",
-                        options=type_options,
-                        index=type_idx,
-                        key=f"doctype_{i}",
-                    )
-                    file_name = st.text_input("File name", value=default_filename, key=f"filename_{i}")
-                with col_d2:
-                    quality_options = [q.value for q in DocumentQuality]
-                    qual_idx = quality_options.index(default_quality) if default_quality in quality_options else 0
-                    quality = st.selectbox(
-                        "Quality",
-                        options=quality_options,
-                        index=qual_idx,
-                        key=f"quality_{i}",
-                    )
-                # If sample has content, show it
-                if default_content is not None:
-                    include_content = st.checkbox(
-                        "Include pre-extracted content (test mode)",
-                        value=True,
-                        key=f"content_{i}",
-                    )
-                    if include_content:
-                        st.json(default_content)
-                else:
-                    include_content = st.checkbox(
-                        "Include pre-extracted content (test mode)",
-                        value=False,
-                        key=f"content_{i}",
-                    )
+    # If a sample is loaded, use its documents; otherwise default to 2 empty
+    if default_docs:
+        st.info(f"Sample loaded — {len(default_docs)} document(s) pre-filled below")
+        num_docs = len(default_docs)
+    else:
+        num_docs = st.number_input("Number of documents", min_value=1, max_value=5, value=2, key=f"num_docs_v{v}")
 
-                content = default_content if include_content and default_content else None
-                if include_content and not default_content:
-                    # Build a basic content based on type
+    documents = []
+    for i in range(num_docs):
+        # Get defaults from sample if available
+        default_doc = default_docs[i] if i < len(default_docs) else {}
+        default_type = default_doc.get("actual_type", "PRESCRIPTION")
+        default_quality = default_doc.get("quality", "GOOD")
+        default_filename = default_doc.get("file_name", f"doc_{i+1}.jpg")
+        default_content = default_doc.get("content")
+
+        with st.expander(f"Document #{i+1}: {default_doc.get('file_id', f'F{i+1:03d}')}", expanded=(i < 2)):
+            col_d1, col_d2 = st.columns(2)
+            with col_d1:
+                type_options = [t.value for t in DocumentType if t.value != "UNKNOWN"]
+                # Initialize doc type in session state
+                doc_type_key = f"doctype_v{v}_{i}"
+                if doc_type_key not in st.session_state:
+                    st.session_state[doc_type_key] = default_type
+                doc_type = st.selectbox(
+                    "Type",
+                    options=type_options,
+                    key=doc_type_key,
+                )
+                filename_key = f"filename_v{v}_{i}"
+                if filename_key not in st.session_state:
+                    st.session_state[filename_key] = default_filename
+                file_name = st.text_input("File name", key=filename_key)
+            with col_d2:
+                quality_options = [q.value for q in DocumentQuality]
+                quality_key = f"quality_v{v}_{i}"
+                if quality_key not in st.session_state:
+                    st.session_state[quality_key] = default_quality
+                quality = st.selectbox(
+                    "Quality",
+                    options=quality_options,
+                    key=quality_key,
+                )
+
+            # Content handling
+            content_checkbox_key = f"content_v{v}_{i}"
+            if default_content is not None:
+                if content_checkbox_key not in st.session_state:
+                    st.session_state[content_checkbox_key] = True
+                include_content = st.checkbox(
+                    "Include pre-extracted content (test mode)",
+                    key=content_checkbox_key,
+                )
+                if include_content:
+                    st.json(default_content)
+                content = default_content if include_content else None
+            else:
+                if content_checkbox_key not in st.session_state:
+                    st.session_state[content_checkbox_key] = False
+                include_content = st.checkbox(
+                    "Include pre-extracted content (test mode)",
+                    key=content_checkbox_key,
+                )
+                content = None
+                if include_content:
                     if doc_type == "PRESCRIPTION":
                         content = {
-                            "patient_name": st.text_input("Patient name", value="Rajesh Kumar", key=f"patient_{i}"),
-                            "doctor_name": st.text_input("Doctor name", value="Dr. Arun Sharma", key=f"doctor_{i}"),
-                            "doctor_registration": st.text_input("Doctor reg", value="KA/45678/2015", key=f"reg_{i}"),
+                            "patient_name": st.text_input("Patient name", value="Rajesh Kumar", key=f"patient_v{v}_{i}"),
+                            "doctor_name": st.text_input("Doctor name", value="Dr. Arun Sharma", key=f"doctor_v{v}_{i}"),
+                            "doctor_registration": st.text_input("Doctor reg", value="KA/45678/2015", key=f"reg_v{v}_{i}"),
                             "date": str(treatment_date),
-                            "diagnosis": st.text_input("Diagnosis", value="Viral Fever", key=f"diag_{i}"),
+                            "diagnosis": st.text_input("Diagnosis", value="Viral Fever", key=f"diag_v{v}_{i}"),
                         }
                     elif doc_type in ("HOSPITAL_BILL", "PHARMACY_BILL"):
                         content = {
                             "hospital_name": hospital_name or "City Clinic",
-                            "patient_name": st.text_input("Patient name", value="Rajesh Kumar", key=f"patient_{i}"),
+                            "patient_name": st.text_input("Patient name", value="Rajesh Kumar", key=f"patient_v{v}_{i}"),
                             "date": str(treatment_date),
                             "total": claimed_amount,
                             "line_items": [
                                 {"description": "Consultation Fee", "amount": claimed_amount},
                             ],
                         }
-                documents.append({
-                    "file_id": default_doc.get("file_id", f"F{i+1:03d}"),
-                    "file_name": file_name,
-                    "actual_type": doc_type,
-                    "quality": quality,
-                    "content": content,
-                })
 
-        submitted = st.form_submit_button("🚀 Submit Claim", use_container_width=True)
+            documents.append({
+                "file_id": default_doc.get("file_id", f"F{i+1:03d}"),
+                "file_name": file_name,
+                "actual_type": doc_type,
+                "quality": quality,
+                "content": content,
+            })
+
+    st.markdown("---")
+    submitted = st.button("🚀 Submit Claim", use_container_width=True, type="primary", key=f"submit_v{v}")
 
     if submitted:
         with st.spinner("Processing claim through 6-agent pipeline..."):
