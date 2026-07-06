@@ -169,13 +169,11 @@ class PolicyRulesEngine:
             )
 
         # ---- Rule 3: Per-claim limit (TC008) ----
-        # Checked AFTER pre-auth. The per-claim limit is bypassed when there
-        # are line items with exclusions — in that case, we process line items
-        # and apply the limit only if no exclusions are found.
+        # Checked AFTER pre-auth. The per-claim limit is bypassed ONLY when
+        # line items have exclusions (TC006 case). Otherwise, it triggers REJECT.
         # For TC008 (no line items, ₹7500 claimed): per-claim limit triggers REJECT.
         # For TC006 (line items, ₹12000 total, ₹8000 approved after exclusion): per-claim limit is bypassed.
         if inp.claimed_amount > self.policy.per_claim_limit:
-            # Quick check: are there any line items that might enable partial approval?
             if not inp.line_items:
                 return PolicyEvaluation(
                     is_valid=False,
@@ -199,10 +197,8 @@ class PolicyRulesEngine:
                     ],
                     confidence=1.0,
                 )
-            # Has line items — fall through to line-item processing
-            # The per-claim limit may still trigger if the approved_line_total
-            # also exceeds it, but we want to give the partial approval a chance
-            # (TC006 case: root canal ₹8000 is approved even though total > per-claim limit)
+            # Has line items — will check again at Rule 4.5 after exclusions
+            # For now, fall through to line-item processing
 
         # ---- Rule 4: Line-item level exclusions (TC006) ----
         line_item_decisions = self._evaluate_line_items(inp.line_items, category)
@@ -236,6 +232,39 @@ class PolicyRulesEngine:
                 ],
                 confidence=0.9,
             )
+
+        # ---- Rule 4.5: Per-claim limit, conditional on line-item exclusions ----
+        # The per-claim limit is bypassed ONLY when there are line-item exclusions.
+        # In that case, we use the line-item approved total (TC006 case: dental
+        # ₹8,000 root canal approved even though total ₹12,000 > ₹5,000 limit).
+        # If all line items are approved, the per-claim limit still applies.
+        if line_item_decisions and not rejected_line_items:
+            # All line items approved, but the per-claim limit is still enforced
+            if approved_line_total > self.policy.per_claim_limit:
+                return PolicyEvaluation(
+                    is_valid=False,
+                    claimed_amount=inp.claimed_amount,
+                    approved_amount=0.0,
+                    category_sub_limit=cat_config.sub_limit,
+                    per_claim_limit=self.policy.per_claim_limit,
+                    per_claim_exceeded=True,
+                    pre_auth_required=pre_auth_required,
+                    pre_auth_obtained=pre_auth_obtained,
+                    high_value_tests=high_value_tests_found,
+                    line_item_decisions=line_item_decisions,
+                    rejection_reasons=[RejectionReason.PER_CLAIM_EXCEEDED],
+                    user_message=(
+                        f"This claim of ₹{inp.claimed_amount:,.0f} exceeds the per-claim limit of "
+                        f"₹{self.policy.per_claim_limit:,.0f} for your policy. "
+                        f"Claims above this limit are not eligible for reimbursement."
+                    ),
+                    calculation_steps=steps + [
+                        f"per-claim limit: ₹{self.policy.per_claim_limit:,.0f}",
+                        f"approved line items total: ₹{approved_line_total:,.0f}",
+                        f"REJECTED — exceeds per-claim limit even after line items",
+                    ],
+                    confidence=1.0,
+                )
 
         # ---- Rule 5: Sub-limit per category (informational, not a hard cap) ----
         # The OPD category sub_limit is the maximum reimbursable amount for that
