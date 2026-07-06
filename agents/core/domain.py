@@ -129,6 +129,13 @@ class ClaimInput(BaseModel):
         ge=0,
         description="Year-to-date claims for this member (used for sub-limit checks)",
     )
+    pre_auth_obtained: bool = Field(
+        False,
+        description=(
+            "Whether pre-authorization was obtained. Defaults to False (conservative). "
+            "Set to True when the member provides a pre-auth reference number."
+        ),
+    )
     claims_history: list[ClaimHistoryItem] = Field(
         default_factory=list,
         description="Prior claims for this member (used for fraud detection)",
