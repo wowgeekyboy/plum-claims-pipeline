@@ -52,6 +52,14 @@ eval/*.md
 docs/EVAL_REPORT.md
 docs/eval_results_*.json
 
+# Reference docs (kept locally only, not pushed)
+docs/ARCHITECTURE.md
+docs/COMPONENT_CONTRACTS.md
+docs/DEPLOYMENT.md
+docs/INTERVIEW_PREP.md
+docs/*.md
+!docs/.gitkeep
+
 # Logs
 *.log
 logs/

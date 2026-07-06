@@ -99,6 +99,14 @@ class PolicyRulesInput(BaseModel):
     )
     diagnosis: str | None = None
     tests_ordered: list[str] = Field(default_factory=list)
-    pre_auth_obtained: bool = Field(True, description="Whether pre-auth was obtained")
+    pre_auth_obtained: bool = Field(
+        False,
+        description=(
+            "Whether pre-authorization was obtained. Defaults to False — "
+            "conservative: assume no pre-auth unless explicitly provided. "
+            "This matches real-world behavior: members must request pre-auth "
+            "before high-value procedures."
+        ),
+    )
     ytd_claims_amount: float = 0.0
     annual_opd_used: float = 0.0
